@@ -11,7 +11,8 @@ ListenerImpl::ListenerImpl()
     : _isInitialized(false)
     , m_tcpPort(-1)
     , _socketListener(nullptr)
-    , _streamSocketResult(nullptr)
+    , m_tcpSocketResult(nullptr)
+    , m_udpSocketResult(nullptr)
 {
     Log(Log_Level_Info, L"ListenerImpl::ListenerImpl()\n");
 }
@@ -125,9 +126,46 @@ HRESULT ListenerImpl::OnConnectionReceived(
 
     auto lock = _lock.Lock();
 
+    ComPtr<IAsyncAction> connectAsync;
+    ComPtr<ConnectionImpl> spConnection;
+    ComPtr<IDatagramSocket> spUdpSocket;
+    ComPtr<IDatagramSocketControl> spSocketControl;
+
+    ComPtr<IStreamSocketInformation> spSocketInfo;
+    ComPtr<IHostName> spHostName;
+
+    std::wstring wsPort = to_wstring(m_udpPort);
+
     HRESULT hr = S_OK;
 
-    IFC(args->get_Socket(&_streamSocketResult));
+    // Save TCP StreamSocket
+    IFC(args->get_Socket(&m_tcpSocketResult));
+
+    // Create UDP connection 
+    IFR(Windows::Foundation::ActivateInstance(
+        Wrappers::HStringReference(RuntimeClass_Windows_Networking_Sockets_DatagramSocket).Get(),
+        &spUdpSocket));
+
+    // Get the datagram control and set properties
+    IFC(spUdpSocket->get_Control(&spSocketControl));
+    IFC(spSocketControl->put_QualityOfService(SocketQualityOfService::SocketQualityOfService_LowLatency));
+
+    IFC(Microsoft::WRL::MakeAndInitialize<ConnectionImpl>(&spConnection,
+        m_tcpSocketResult.Get(),
+        spUdpSocket.Get()));
+
+    NULL_CHK_HR(spConnection, E_NOT_SET);
+
+    m_spConnection = spConnection;
+
+    IFC(m_tcpSocketResult->get_Information(&spSocketInfo));
+    
+    IFC(spSocketInfo->get_RemoteHostName(&spHostName));
+
+    IFC(spUdpSocket->ConnectAsync(
+        spHostName.Get(),
+        Wrappers::HStringReference(wsPort.data()).Get(),
+        &connectAsync));
 
 done:
     if (FAILED(hr))
@@ -135,7 +173,24 @@ done:
         TryTransitionToError(hr);
     }
 
-    return FireCompletion();
+    ComPtr<ListenerImpl> spThis(this);
+    return StartAsyncThen(connectAsync.Get(),
+        [this, spThis, spUdpSocket](_In_ HRESULT hr, _In_ IAsyncAction* pAsyncResult, _In_ AsyncStatus asyncStatus)->HRESULT
+    {
+        auto lock = _lock.Lock();
+
+        IFC(hr);
+
+        IFC(spUdpSocket.As(&m_udpSocketResult));
+
+    done:
+        if (FAILED(hr))
+        {
+            TryTransitionToError(hr);
+        }
+
+        return FireCompletion();
+    });
 };
 
 
@@ -162,12 +217,15 @@ HRESULT ListenerImpl::GetResults(
 
     IFR(AsyncBase::CheckValidStateForResultsCall());
 
+    /*
     ComPtr<ConnectionImpl> spConnection;
-    IFR(Microsoft::WRL::MakeAndInitialize<ConnectionImpl>(&spConnection, _streamSocketResult.Detach()));
+    IFR(Microsoft::WRL::MakeAndInitialize<ConnectionImpl>(&spConnection, 
+        m_tcpSocketResult.Detach()));
+    */
 
-    NULL_CHK_HR(spConnection, E_OUTOFMEMORY);
+    NULL_CHK_HR(m_spConnection, E_OUTOFMEMORY);
 
-    spConnection.CopyTo(ppConnection);
+    m_spConnection.CopyTo(ppConnection);
 
     return Close();
 }
@@ -255,13 +313,13 @@ void ListenerImpl::CloseInternal()
     _socketListener.Reset();
     _socketListener = nullptr;
 
-    if (nullptr != _streamSocketResult)
+    if (nullptr != m_tcpSocketResult)
     {
-        if SUCCEEDED(_streamSocketResult.As(&closeable))
+        if SUCCEEDED(m_tcpSocketResult.As(&closeable))
         {
             LOG_RESULT(closeable->Close());
         }
     }
-    _streamSocketResult.Reset();
-    _streamSocketResult = nullptr;
+    m_tcpSocketResult.Reset();
+    m_tcpSocketResult = nullptr;
 }

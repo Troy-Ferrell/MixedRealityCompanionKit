@@ -67,7 +67,9 @@ namespace RealtimeStreaming
             Microsoft::WRL::EventSource<IClosedEventHandler> _evtClosed;
 
             ComPtr<IStreamSocket> m_tcpSocketResult;
-			ComPtr<IDatagramSocket> m_datagramSocketResult;
+			ComPtr<IDatagramSocket> m_udpSocketResult;
+
+			ComPtr<IConnection> m_spConnection;
         };
 
         class ConnectorStaticsImpl

@@ -147,9 +147,9 @@ HRESULT ConnectorImpl::GetResults(
     //ComPtr<ConnectionImpl> spConnection;
     //IFR(Microsoft::WRL::MakeAndInitialize<ConnectionImpl>(&spConnection, _streamSocketResult.Detach()));
 
-    //NULL_CHK_HR(spConnection, E_NOT_SET);
+    NULL_CHK_HR(m_spConnection, E_NOT_SET);
 
-    IFR(spConnection.CopyTo(ppConnection));
+    IFR(m_spConnection.CopyTo(ppConnection));
 
     return Close();
 }
@@ -186,9 +186,13 @@ HRESULT ConnectorImpl::OnStart(void)
         connectAsync.Get(),
         [this, spThis, streamSocket](_In_ HRESULT hr, _In_ IAsyncAction* pAsyncResult, _In_ AsyncStatus asyncStatus) -> HRESULT
     {
-		ComPtr<IAsyncAction> spCreateUDPAction;
-
         auto lock = _lock.Lock();
+        
+        ComPtr<IAsyncAction> connectAsync;
+        ComPtr<ConnectionImpl> spConnection;
+        ComPtr<IDatagramSocket> spUdpSocket;
+        ComPtr<IDatagramSocketControl> spSocketControl;
+        std::wstring wsPort = to_wstring(m_udpPort);
 
         IFC(hr);
 
@@ -196,27 +200,21 @@ HRESULT ConnectorImpl::OnStart(void)
 		IFC(streamSocket.As(&m_tcpSocketResult))
 
 		// Create UDP connection 
-		ComPtr<IDatagramSocket> spUdpSocket;
 		IFR(Windows::Foundation::ActivateInstance(
 			Wrappers::HStringReference(RuntimeClass_Windows_Networking_Sockets_DatagramSocket).Get(),
 			&spUdpSocket));
 
 		// Get the datagram control and set properties
-		ComPtr<IDatagramSocketControl> spSocketControl;
 		IFC(spUdpSocket->get_Control(&spSocketControl));
 		IFC(spSocketControl->put_QualityOfService(SocketQualityOfService::SocketQualityOfService_LowLatency));
 
-		ComPtr<ConnectionImpl> spConnection;
-		IFR(Microsoft::WRL::MakeAndInitialize<ConnectionImpl>(&spConnection, 
+		IFC(Microsoft::WRL::MakeAndInitialize<ConnectionImpl>(&spConnection, 
 			streamSocket.Get(),
 			spUdpSocket.Get()));
 
 		NULL_CHK_HR(spConnection, E_NOT_SET);
 
-		// setup connection Action
-		ComPtr<IAsyncAction> connectAsync;
-		
-		std::wstring wsPort = to_wstring(m_udpPort);
+		m_spConnection = spConnection;
 
 		IFC(spUdpSocket->ConnectAsync(
 			m_hostName.Get(),
@@ -229,14 +227,14 @@ HRESULT ConnectorImpl::OnStart(void)
             TryTransitionToError(hr);
         }
 
-		return StartAsyncThen(spCreateUDPAction.Get(), 
+		return StartAsyncThen(connectAsync.Get(),
 			[this, spThis, spUdpSocket](_In_ HRESULT hr, _In_ IAsyncAction* pAsyncResult, _In_ AsyncStatus asyncStatus)->HRESULT
 		{
 			auto lock = _lock.Lock();
 			
 			IFC(hr);
 
-			IFC(spUdpSocket.As(&m_datagramSocketResult));
+			IFC(spUdpSocket.As(&m_udpSocketResult));
 
 		done:
 			if (FAILED(hr))

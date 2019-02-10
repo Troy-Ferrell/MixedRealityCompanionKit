@@ -82,7 +82,7 @@ HRESULT ConnectionImpl::RuntimeClassInitialize(
     Log(Log_Level_Info, L"ConnectionImpl::RuntimeClassInitialize(socket)\n");
 
     NULL_CHK(pTcpSocket);
-	NULL_CHK(pUdpSocket);
+	 NULL_CHK(pUdpSocket);
 
     auto lock = _lock.Lock();
 
@@ -94,7 +94,6 @@ HRESULT ConnectionImpl::RuntimeClassInitialize(
 
     ZeroMemory(&_receivedHeader, sizeof(PayloadHeader));
     _receivedHeader.ePayloadType = PayloadType_Unknown;
-
 
 	// store the socket
 	ComPtr<IDatagramSocket> spUdpSocket(pUdpSocket);
@@ -122,7 +121,16 @@ HRESULT ConnectionImpl::OnMessageReceived(
 	IDatagramSocketMessageReceivedEventArgs* args
 )
 {
+    // read in data into databundle (get reader?)
+    // read in header than read in payload?
 
+    // don't send payload type and header?
+
+    // onheaderreceived and processheader
+
+    //SendPayloadType -> when it is mediasample
+    //-> SendBundle with udp
+    return S_OK;
 }
 
 
@@ -153,6 +161,14 @@ HRESULT ConnectionImpl::Uninitialize(void)
     {
         return S_OK;
     }
+
+	 if (m_udpSocket != nullptr)
+	 {
+		  LOG_RESULT(m_udpSocket->remove_MessageReceived(m_udpMessageReceivedToken));
+
+		  m_udpSocket.Reset();
+		  m_udpSocket = nullptr;
+	 }
 
     _isInitialized = false;
 

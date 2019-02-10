@@ -72,12 +72,15 @@ namespace RealtimeStreaming
             boolean                     _isInitialized;
 
             UINT16                      m_tcpPort;
+            UINT16                      m_udpPort;
             EventSource<Plugin::IClosedEventHandler>    _evtClosed;
 
             ComPtr<IStreamSocketListener>   _socketListener;
             EventRegistrationToken          _connectionReceivedEventToken;
 
-            ComPtr<IStreamSocket>           _streamSocketResult;
+            ComPtr<IStreamSocket>           m_tcpSocketResult;
+            ComPtr<IDatagramSocket>         m_udpSocketResult;
+			ComPtr<IConnection> m_spConnection;
         };
 
         class ListenerStaticsImpl
