@@ -16,6 +16,9 @@ namespace RealtimeStreaming
         typedef IAsyncOperationWithProgress<UINT32, UINT32> IStreamWriteOperation;
         typedef IAsyncOperationWithProgressCompletedHandler<UINT32, UINT32> IStreamWriteCompletedEventHandler;
 
+		typedef ABI::Windows::Foundation::ITypedEventHandler<ABI::Windows::Networking::Sockets::DatagramSocket*, 
+			ABI::Windows::Networking::Sockets::DatagramSocketMessageReceivedEventArgs*> IUDPMessageReceivedHandler;
+
         MIDL_INTERFACE("edb95f27-f221-4c5e-b869-516e15cc6c2c")
             IWriteCompleted : IUnknown
         {
@@ -123,7 +126,8 @@ namespace RealtimeStreaming
 
             // RuntimeClass
             STDMETHODIMP RuntimeClassInitialize(
-                _In_ ABI::Windows::Networking::Sockets::IStreamSocket *socket);
+                _In_ ABI::Windows::Networking::Sockets::IStreamSocket *pTcpSocket,
+				_In_ ABI::Windows::Networking::Sockets::IDatagramSocket *pUdpSocket);
 
             // IModule
             IFACEMETHOD(get_IsInitialized)(
@@ -163,6 +167,9 @@ namespace RealtimeStreaming
             IFACEMETHOD(WaitForHeader)();
             IFACEMETHOD(WaitForPayload)();
 
+			HRESULT OnMessageReceived(
+				_In_ ABI::Windows::Networking::Sockets::IDatagramSocket* sender,
+				_In_ ABI::Windows::Networking::Sockets::IDatagramSocketMessageReceivedEventArgs* args);
             HRESULT OnHeaderReceived(
                 _In_ IAsyncOperationWithProgress<IBuffer*, UINT32> *asyncResult, 
                 _In_ AsyncStatus asyncStatus);
@@ -189,6 +196,9 @@ namespace RealtimeStreaming
 
             ComPtr<IThreadPoolStatics> _threadPoolStatics;
             ComPtr<ABI::Windows::Networking::Sockets::IStreamSocket>    _streamSocket;
+			ComPtr<ABI::Windows::Networking::Sockets::IDatagramSocket>    m_udpSocket;
+
+			EventRegistrationToken m_udpMessageReceivedToken;
 
             ComPtr<RealtimeStreaming::Network::DataBufferImpl>  _spHeaderBuffer;
 

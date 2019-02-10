@@ -302,7 +302,7 @@ HRESULT NetworkMediaSinkImpl::RuntimeClassInitialize(
     });
 
     EventRegistrationToken bundleEventToken;
-    IFR(spConnection->add_Received(bundleReceivedCallback.Get(), &bundleEventToken));
+    IFR(spConnection->add_Received(bundleReceivedCallback.Get(), &_bundleReceivedEventToken));
 
     IFR(SendCaptureReady());
 

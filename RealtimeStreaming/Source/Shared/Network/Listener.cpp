@@ -9,7 +9,7 @@ ActivatableStaticOnlyFactory(ListenerStaticsImpl);
 
 ListenerImpl::ListenerImpl()
     : _isInitialized(false)
-    , _port(-1)
+    , m_tcpPort(-1)
     , _socketListener(nullptr)
     , _streamSocketResult(nullptr)
 {
@@ -32,7 +32,7 @@ HRESULT ListenerImpl::RuntimeClassInitialize(UINT16 port)
 
     _isInitialized = true;
 
-    _port = port;
+    m_tcpPort = port;
 
     return S_OK;
 }
@@ -178,7 +178,7 @@ HRESULT ListenerImpl::OnStart(void)
     Log(Log_Level_Info, L"ListenerImpl::OnStart()\n");
 
     // convert port to string
-    std::wstring wsPort = to_wstring(_port);
+    std::wstring wsPort = to_wstring(m_tcpPort);
 
     // create a listener
     ComPtr<ABI::Windows::Networking::Sockets::IStreamSocketListener> socketListener;

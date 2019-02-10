@@ -71,7 +71,7 @@ namespace RealtimeStreaming
 
             boolean                     _isInitialized;
 
-            UINT16                      _port;
+            UINT16                      m_tcpPort;
             EventSource<Plugin::IClosedEventHandler>    _evtClosed;
 
             ComPtr<IStreamSocketListener>   _socketListener;

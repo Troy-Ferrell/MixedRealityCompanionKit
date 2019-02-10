@@ -9,9 +9,9 @@ ActivatableStaticOnlyFactory(ConnectorStaticsImpl);
 _Use_decl_annotations_
 ConnectorImpl::ConnectorImpl()
     : _isInitialized(false)
-    , _hostName(nullptr)
-    , _port(-1)
-    , _streamSocketResult(nullptr)
+    , m_hostName(nullptr)
+    , m_tcpPort(-1)
+    , m_tcpSocketResult(nullptr)
 {
     Log(Log_Level_Info, L"ConnectorImpl::ConnectorImpl()\n");
 }
@@ -32,9 +32,9 @@ HRESULT ConnectorImpl::RuntimeClassInitialize(
     Log(Log_Level_Info, L"ConnectorImpl::RuntimeClassInitialize(IHostName)\n");
 
     ComPtr<ABI::Windows::Networking::IHostName> spHostName(hostName);
-    IFR(spHostName.As(&_hostName));
+    IFR(spHostName.As(&m_hostName));
 
-    _port = port;
+    m_tcpPort = port;
 
     _isInitialized = true;
 
@@ -144,10 +144,10 @@ HRESULT ConnectorImpl::GetResults(
 
     IFR(AsyncBase::CheckValidStateForResultsCall());
 
-    ComPtr<ConnectionImpl> spConnection;
-    IFR(Microsoft::WRL::MakeAndInitialize<ConnectionImpl>(&spConnection, _streamSocketResult.Detach()));
+    //ComPtr<ConnectionImpl> spConnection;
+    //IFR(Microsoft::WRL::MakeAndInitialize<ConnectionImpl>(&spConnection, _streamSocketResult.Detach()));
 
-    NULL_CHK_HR(spConnection, E_NOT_SET);
+    //NULL_CHK_HR(spConnection, E_NOT_SET);
 
     IFR(spConnection.CopyTo(ppConnection));
 
@@ -158,7 +158,7 @@ _Use_decl_annotations_
 HRESULT ConnectorImpl::OnStart(void)
 {
     // set port as a string
-    std::wstring wsPort = to_wstring(_port);
+    std::wstring wsPort = to_wstring(m_tcpPort);
 
     // activate a stream socket
     ComPtr<IStreamSocket> streamSocket;
@@ -176,21 +176,52 @@ HRESULT ConnectorImpl::OnStart(void)
     // setup connection Action
     ComPtr<IAsyncAction> connectAsync;
     IFR(streamSocket->ConnectAsync(
-        _hostName.Get(), 
+        m_hostName.Get(), 
         Wrappers::HStringReference(wsPort.data()).Get(), 
         &connectAsync));
 
-    // set callback and handle result
+    // Make TCP connection with server
     ComPtr<ConnectorImpl> spThis(this);
     return StartAsyncThen(
         connectAsync.Get(),
         [this, spThis, streamSocket](_In_ HRESULT hr, _In_ IAsyncAction* pAsyncResult, _In_ AsyncStatus asyncStatus) -> HRESULT
     {
+		ComPtr<IAsyncAction> spCreateUDPAction;
+
         auto lock = _lock.Lock();
 
         IFC(hr);
 
-        IFC(streamSocket.As(&_streamSocketResult))
+		// Save TCP StreamSocket
+		IFC(streamSocket.As(&m_tcpSocketResult))
+
+		// Create UDP connection 
+		ComPtr<IDatagramSocket> spUdpSocket;
+		IFR(Windows::Foundation::ActivateInstance(
+			Wrappers::HStringReference(RuntimeClass_Windows_Networking_Sockets_DatagramSocket).Get(),
+			&spUdpSocket));
+
+		// Get the datagram control and set properties
+		ComPtr<IDatagramSocketControl> spSocketControl;
+		IFC(spUdpSocket->get_Control(&spSocketControl));
+		IFC(spSocketControl->put_QualityOfService(SocketQualityOfService::SocketQualityOfService_LowLatency));
+
+		ComPtr<ConnectionImpl> spConnection;
+		IFR(Microsoft::WRL::MakeAndInitialize<ConnectionImpl>(&spConnection, 
+			streamSocket.Get(),
+			spUdpSocket.Get()));
+
+		NULL_CHK_HR(spConnection, E_NOT_SET);
+
+		// setup connection Action
+		ComPtr<IAsyncAction> connectAsync;
+		
+		std::wstring wsPort = to_wstring(m_udpPort);
+
+		IFC(spUdpSocket->ConnectAsync(
+			m_hostName.Get(),
+			Wrappers::HStringReference(wsPort.data()).Get(),
+			&connectAsync));
 
     done:
         if (FAILED(hr))
@@ -198,7 +229,23 @@ HRESULT ConnectorImpl::OnStart(void)
             TryTransitionToError(hr);
         }
 
-        return FireCompletion();
+		return StartAsyncThen(spCreateUDPAction.Get(), 
+			[this, spThis, spUdpSocket](_In_ HRESULT hr, _In_ IAsyncAction* pAsyncResult, _In_ AsyncStatus asyncStatus)->HRESULT
+		{
+			auto lock = _lock.Lock();
+			
+			IFC(hr);
+
+			IFC(spUdpSocket.As(&m_datagramSocketResult));
+
+		done:
+			if (FAILED(hr))
+			{
+				TryTransitionToError(hr);
+			}
+
+			return FireCompletion();
+		});
     });
 }
 
@@ -220,9 +267,9 @@ void ConnectorImpl::CloseInternal(void)
     Log(Log_Level_Info, L"ConnectorImpl::CloseInternal()\n");
 
     ComPtr<ABI::Windows::Foundation::IClosable> closeable;
-    if (nullptr != _streamSocketResult)
+    if (nullptr != m_tcpSocketResult)
     {
-        if SUCCEEDED(_streamSocketResult.As(&closeable))
+        if SUCCEEDED(m_tcpSocketResult.As(&closeable))
         {
             LOG_RESULT(closeable->Close());
         }
@@ -230,6 +277,6 @@ void ConnectorImpl::CloseInternal(void)
         ComPtr<IConnector> spThis(this);
         LOG_RESULT(_evtClosed.InvokeAll(spThis.Get()));
     }
-    _streamSocketResult.Reset();
-    _streamSocketResult = nullptr;
+    m_tcpSocketResult.Reset();
+    m_tcpSocketResult = nullptr;
 }

@@ -718,6 +718,7 @@ HRESULT RealtimeMediaSourceImpl::ProcessMediaFormatChange(
 
         // Create a media type object.
         IFC(MFCreateMediaType(&spMediaType));
+
         // Initialize media type's attributes
         IFC(MFInitAttributesFromBlob(spMediaType.Get(), blob.data(), streamDesc.AttributesBlobSize));
     }

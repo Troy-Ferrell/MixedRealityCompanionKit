@@ -76,22 +76,34 @@ ConnectionImpl::~ConnectionImpl()
 
 _Use_decl_annotations_
 HRESULT ConnectionImpl::RuntimeClassInitialize(
-    IStreamSocket* socket)
+    IStreamSocket* pTcpSocket,
+	IDatagramSocket* pUdpSocket)
 {
     Log(Log_Level_Info, L"ConnectionImpl::RuntimeClassInitialize(socket)\n");
 
-    NULL_CHK(socket);
+    NULL_CHK(pTcpSocket);
+	NULL_CHK(pUdpSocket);
 
     auto lock = _lock.Lock();
 
     _isInitialized = true;
 
     // store the socket
-    ComPtr<IStreamSocket> spSocket(socket);
+    ComPtr<IStreamSocket> spSocket(pTcpSocket);
     IFR(spSocket.As(&_streamSocket));
 
     ZeroMemory(&_receivedHeader, sizeof(PayloadHeader));
     _receivedHeader.ePayloadType = PayloadType_Unknown;
+
+
+	// store the socket
+	ComPtr<IDatagramSocket> spUdpSocket(pUdpSocket);
+	IFR(spUdpSocket.As(&m_udpSocket));
+	
+	auto messageReceivedCallback =
+		Microsoft::WRL::Callback<IUDPMessageReceivedHandler>(this, &ConnectionImpl::OnMessageReceived);
+
+	IFR(spUdpSocket->add_MessageReceived(messageReceivedCallback.Get(), &m_udpMessageReceivedToken));
 
     // create a thread to send data
     ComPtr<IThreadPoolStatics> threadPoolStatics;
@@ -102,6 +114,15 @@ HRESULT ConnectionImpl::RuntimeClassInitialize(
     IFR(threadPoolStatics.As(&_threadPoolStatics));
 
     return WaitForHeader();
+}
+
+_Use_decl_annotations_
+HRESULT ConnectionImpl::OnMessageReceived(
+	IDatagramSocket* sender,
+	IDatagramSocketMessageReceivedEventArgs* args
+)
+{
+
 }
 
 
@@ -253,7 +274,6 @@ _Use_decl_annotations_
 HRESULT ConnectionImpl::SendPayloadType(
     PayloadType payloadType)
 {
-    //Log(Log_Level_Info, L"ConnectionImpl::SendRequest(%d)\n", payloadType);
     Log(Log_Level_All, L"ConnectionImpl::SendBundleAsync(%d) - Tid: %d \n", payloadType, GetCurrentThreadId());
 
     // send an PayloadType header, contains no payload.
@@ -332,7 +352,6 @@ HRESULT ConnectionImpl::SendBundleAsync(
     IDataBundle *dataBundle,
     IAsyncAction **sendAction)
 {
-    //Log(Log_Level_Info, L"ConnectionImpl::SendBundleAsync\n");
     Log(Log_Level_All, L"ConnectionImpl::SendBundleAsync - Tid: %d \n", GetCurrentThreadId());
 
     NULL_CHK(dataBundle);
@@ -441,7 +460,6 @@ HRESULT ConnectionImpl::SendBundleAsync(
 _Use_decl_annotations_
 HRESULT ConnectionImpl::WaitForHeader()
 {
-    //Log(Log_Level_Info, L"ConnectionImpl::WaitForHeader()\n");
     Log(Log_Level_All, L"ConnectionImpl::WaitForHeader - Tid: %d \n", GetCurrentThreadId());
 
     IFR(CheckClosed());

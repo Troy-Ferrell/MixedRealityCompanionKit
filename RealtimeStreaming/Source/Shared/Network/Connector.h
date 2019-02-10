@@ -61,11 +61,13 @@ namespace RealtimeStreaming
             Wrappers::CriticalSection _lock;
             boolean _isInitialized;
 
-            ComPtr<IHostName> _hostName;
-            UINT16 _port;
+            ComPtr<IHostName> m_hostName;
+            UINT16 m_tcpPort;
+			UINT16 m_udpPort;
             Microsoft::WRL::EventSource<IClosedEventHandler> _evtClosed;
 
-            ComPtr<IStreamSocket> _streamSocketResult;
+            ComPtr<IStreamSocket> m_tcpSocketResult;
+			ComPtr<IDatagramSocket> m_datagramSocketResult;
         };
 
         class ConnectorStaticsImpl
@@ -102,3 +104,4 @@ namespace RealtimeStreaming
         };
     }
 }
+
