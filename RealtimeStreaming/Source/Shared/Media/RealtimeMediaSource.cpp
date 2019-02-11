@@ -327,6 +327,10 @@ HRESULT RealtimeMediaSourceImpl::OnDataReceived(
     // TODO: Troy figure out right lock
     //auto lock = m_lock.LockExclusive();
 
+    auto now = std::chrono::system_clock::now();
+    auto now_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(now);
+    Log(Log_Level_Info, L"RealtimeMediaSourceImpl::OnDataReceived() - Time:%d\n", now_ms);
+
     HRESULT hr = S_OK;
     PayloadType type;
     ComPtr<IDataBundle> spDataBundle;
@@ -334,9 +338,8 @@ HRESULT RealtimeMediaSourceImpl::OnDataReceived(
     IFC(CheckShutdown());
 
     IFC(args->get_PayloadType(&type));
-
     Log(Log_Level_Info, L"RealtimeMediaSourceImpl::OnDataReceived(%d)\n", type);
-
+    
     IFC(args->get_DataBundle(&spDataBundle));
 
     switch (type)
@@ -574,6 +577,8 @@ _Use_decl_annotations_
 HRESULT RealtimeMediaSourceImpl::ProcessMediaSample(
     IDataBundle* pBundle)
 {
+    auto func_start = std::chrono::system_clock::now();
+    std::chrono::system_clock::time_point now, start, end;
     //auto lock = m_lock.TryLockExclusive();
     //auto lock = _lock.Lock();
 
@@ -615,11 +620,19 @@ HRESULT RealtimeMediaSourceImpl::ProcessMediaSample(
     {
         auto lock = _lock.Lock();
 
-        Log(Log_Level_Info, L"RealtimeMediaSourceImpl::ProcessMediaSample() - CurrentTS: %d - Last TS:%d \n", sampleHead.hnsTimestamp, m_lastTimeStamp);
+        now = std::chrono::system_clock::now();
+        std::chrono::duration<double> elapsed_seconds = now - lastProcess;
+        lastProcess = now;
+        
+        Log(Log_Level_Info, L"RealtimeMediaSourceImpl::ProcessMediaSample() - CurrentTS: %d \n", sampleHead.hnsTimestamp);
+        Log(Log_Level_Info, L"RealtimeMediaSourceImpl::ProcessMediaSample() - LastTS: %d \n", m_lastTimeStamp);
+        Log(Log_Level_Info, L"RealtimeMediaSourceImpl::ProcessMediaSample() - Time since last ProcessMediaSample() %f seconds \n", elapsed_seconds.count());
 
         // Drop sample if it's timestamp is in the past of what we have processed
         if (m_lastTimeStamp > sampleHead.hnsTimestamp)
         {
+            Log(Log_Level_Info, L"RealtimeMediaSourceImpl::ProcessMediaSample() - Dropped frame\n");
+
             // TODO: Complete defferal????
             return S_OK;
         }
@@ -627,11 +640,17 @@ HRESULT RealtimeMediaSourceImpl::ProcessMediaSample(
         m_lastTimeStamp = sampleHead.hnsTimestamp;
     }
 
+    start = std::chrono::system_clock::now();
+
     // Convert bundle data into IMFSample
     IFC(pBundleImpl->ToMFSample(&spSample));
 
     // Set appropriate attributes of sample from header data
     IFC(SetSampleAttributes(&sampleHead, spSample.Get()));
+
+    end = std::chrono::system_clock::now();
+    std::chrono::duration<double> toSampleSeconds = end - start;
+    Log(Log_Level_Info, L"RealtimeMediaSourceImpl::ProcessMediaSample() - Time to prep sample %f seconds \n", toSampleSeconds.count());
 
     {
         // Save the recorded sample off the network to be given to OnSampleRequested called by the internal MediaStreamSource
@@ -663,6 +682,11 @@ done:
     {
         return HandleError(hr);
     }
+
+    // Some computation here
+    auto func_end = std::chrono::system_clock::now();
+    std::chrono::duration<double> func_elapsed_seconds = func_end - func_start;
+    Log(Log_Level_Info, L"RealtimeMediaSourceImpl::ProcessMediaSample() - Total Time %f seconds \n", func_elapsed_seconds.count());
 
     return hr;
 }

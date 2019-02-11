@@ -6,9 +6,9 @@
  /* File created by MIDL compiler version 8.01.0622 */
 /* at Mon Jan 18 19:14:07 2038
  */
-/* Compiler settings for C:\Users\TRFERR~1.RED\AppData\Local\Temp\RealtimeStreaming.idl-4f7012f6:
-    Oicf, W1, Zp8, env=Win64 (32b run), target_arch=AMD64 8.01.0622 
-    protocol : all , ms_ext, c_ext, robust
+/* Compiler settings for C:\Users\TroyF\AppData\Local\Temp\RealtimeStreaming.idl-ffa8d290:
+    Oicf, W1, Zp8, env=Win32 (32b run), target_arch=ARM 8.01.0622 
+    protocol : dce , ms_ext, c_ext, robust
     error checks: allocation ref bounds_check enum stub_data 
     VC __declspec() decoration level: 
          __declspec(uuid()), __declspec(selectany), __declspec(novtable)

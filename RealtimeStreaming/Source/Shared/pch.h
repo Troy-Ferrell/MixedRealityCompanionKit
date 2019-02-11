@@ -19,6 +19,7 @@
 #include <memory>
 #include <future>
 #include <random>
+#include <chrono>
 
 // Windows
 #include <initguid.h>

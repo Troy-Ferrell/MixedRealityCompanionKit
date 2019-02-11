@@ -150,6 +150,10 @@ namespace RealtimeStreaming
             ComPtr<ABI::Windows::Media::Core::IMediaStreamSourceSampleRequest> m_spRequest;
             ComPtr<ABI::Windows::Media::Core::IMediaStreamSourceSampleRequestDeferral> m_deferral;
             SourceStreamState _eSourceState; // Flag to indicate if Shutdown() method was called.
+
+
+        // Some computation here
+            std::chrono::system_clock::time_point lastProcess;
         };
     }
 }

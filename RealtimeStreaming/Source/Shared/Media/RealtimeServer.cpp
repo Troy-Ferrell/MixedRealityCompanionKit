@@ -54,10 +54,14 @@ HRESULT RealtimeServerImpl::RuntimeClassInitialize(
     // Create sink writer which will write to our custom network sink
     ComPtr<IMFSinkWriter> spSinkWriter;
 
-    // TODO: https://docs.microsoft.com/en-us/windows/desktop/medfound/sink-writer-attributes
-    // Add sink writer attributes*
+    // Enable HW encoding for sink writer attributes
+    ComPtr<IMFAttributes> spAttributes;
+    IFR(MFCreateAttributes(&spAttributes, 1));
+    IFR(spAttributes->SetUINT32(MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, TRUE));
 
-    IFR(MFCreateSinkWriterFromMediaSink(networkSink.Get(), nullptr, &spSinkWriter));
+    IFR(MFCreateSinkWriterFromMediaSink(networkSink.Get(), 
+        spAttributes.Get(),
+        &spSinkWriter));
 
     // Set the output media type.
     ComPtr<IMFMediaType>  spMediaTypeOut;
